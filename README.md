@@ -66,5 +66,3 @@ If you find it useful for your research and applications, please cite related pa
 - [GroupViT](https://github.com/groupvit): the codebase we built upon.
 - [Uniformer](https://github.com/uniformer): the codebase we built upon.
 
-## Related Projects
-
