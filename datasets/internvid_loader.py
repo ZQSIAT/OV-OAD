@@ -18,7 +18,7 @@ from IPython import embed
 # import models.backbones.clip as CLIP
 import av
 from petrel_client.client import Client
-client = Client("/mnt/petrelfs/heyinan/petreloss.conf")
+client = Client("/mnt/petrelfs/xxx/petreloss.conf")
 
 # len 28
 kinetics_templates = [
