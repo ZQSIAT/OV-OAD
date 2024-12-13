@@ -8,8 +8,8 @@ This repo takes the initial step towards leveraging text learning for online act
 
 ## Release Notes
 
-- **[2024/10/04] 🔥 OV-OAD** Code release.
-- **[2024/12/11] 🔥 OV-OAD** Open source data processing.
+- **[2024/10/04] OV-OAD** Code release.
+- **[2024/12/11] OV-OAD** Open source data processing.
 - **[2024/12/13] 🔥 OV-OAD** Open source training and testing code.
 
 ## Models & Scripts
