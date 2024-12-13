@@ -52,20 +52,12 @@ class ProjectMLP(nn.Module):
         super(ProjectMLP, self).__init__()
         # hidden layers
         linear_hidden = []
-        # for i in range(num_layers - 1):
-        #     linear_hidden.append(nn.Conv1d(in_dim if i == 0 else inner_dim, inner_dim, kernel_size=1))
-        #     linear_hidden.append(nn.BatchNorm1d(inner_dim, track_running_stats=False))  # use mini batch 
-        #     linear_hidden.append(nn.ReLU(inplace=True))  # inplace=False
-        # self.linear_hidden = nn.Sequential(*linear_hidden)
 
         for i in range(num_layers - 1):
             linear_hidden.append(nn.Linear(in_dim if i == 0 else inner_dim, inner_dim))
             linear_hidden.append(nn.LayerNorm(inner_dim)) 
             linear_hidden.append(nn.GELU()) 
         self.linear_hidden = nn.Sequential(*linear_hidden)
-
-        # self.linear_out = nn.Conv1d(
-        #     in_dim if num_layers == 1 else inner_dim, out_dim, kernel_size=1) if num_layers >= 1 else nn.Identity()
 
         self.linear_out = nn.Linear(in_dim if num_layers == 1 else inner_dim, out_dim) if num_layers >= 1 else nn.Identity()
         
@@ -176,17 +168,13 @@ class MultimodalGroupingBlock(nn.Module):
             new_x (torch.Tensor): [B, S_2, C], S_2 is the new number of
                 group tokens
         """
-        # [B, K, C], self-attention
-        # visual_tokens = self.visual_attn(visual_tokens)
+
     
         text_tokens = self.norm_tokens(text_tokens)
         visual_tokens = self.norm_x(visual_tokens)
     
         # [B, L, C], cross attention
         projected_text_tokens = self.pre_assign_attn(text_tokens, visual_tokens)
-        ### mask needs to be [b, 1, 77, 1] to match [b, nh, 77, k]
-        # projected_text_tokens = text_tokens
-        # new_x, attn_dict = self.assign(projected_text_tokens, visual_tokens, return_attn=return_attn, mask=question_masks)
         
         if ans_tokens is None:
             ans_temp = projected_text_tokens
@@ -329,14 +317,11 @@ class MultiLabelContrastive(nn.Module):
 
 
         if self.use_saliency or self.use_enc_feat:
-            # embed()
-            # exit() 
-            # TODO
             import clip as CLIP
             models_name = "ViT-B/16"
             clip_model, _preprocess = CLIP.load(models_name)
             # scale = self.img_encoder.embed_dim ** -0.5
-            self.saliency_projector = nn.Parameter(clip_model.visual.proj.detach().float()) # .requires_grad_(True) # be or not to be fixed proj ? TODO
+            self.saliency_projector = nn.Parameter(clip_model.visual.proj.detach().float()) 
         else:
             self.saliency_projector = nn.Identity()
 
@@ -461,10 +446,6 @@ class MultiLabelContrastive(nn.Module):
         
         ################ THIS IS PERHAPS IMPORTANT HERE ##############
         mask2 = mask2.sigmoid() # 
-        # mask2 = F.softmax(mask2, dim=1)
-        # mask2 = min_max_norm(mask2)
-        # mask2 = F.normalize(mask2)
-
         mask2_pseudo = mask2
         mask2_pseudo = rearrange(mask2_pseudo, 'b k d -> (b k) d') # [2048, 50176]
 
@@ -473,11 +454,6 @@ class MultiLabelContrastive(nn.Module):
         mask2_onehot[mask2_onehot >= 0] = 1.0  # [2048, 50176]
         mask2_onehot[mask2_onehot < 0] = 0.0 # [2048, 50176]
         mask2_onehot = rearrange(mask2_onehot, '(b k) d -> b k d', k=num_masks) # [256, 8, 50176]
-
-        # self.draw_attn(rearrange(mask1, 'b k (h w) -> b k h w', k=num_masks, h=224), 'before_sigmoid')
-        # set_trace()
-        # mask1 = F.softmax(mask1, dim=1)
-        # mask1 = torch.sigmoid(mask1)
         mask1 = self.min_max_norm(mask1) # [256, 8, 50176]
         
         ####### select topk mask for contrast w.r.t ratio #######
@@ -632,8 +608,6 @@ class MultiLabelContrastive(nn.Module):
         outs.append(text_x, 'text_x')
         outs.append(x, 'text_x_before_proj') # add transformer out
         outs.append(all_tokens, 'text_feat_before_proj')
-        # embed()
-        # exit()
         outs.append(self.text_projector(all_tokens), 'text_feat_after_proj')
 
         # if squeeze_dim:
@@ -678,19 +652,14 @@ class MultiLabelContrastive(nn.Module):
         image_x = image_outs['image_x'] # [B, C]
         text_outs = self.encode_text(text, as_dict=True)
         text_x = text_outs['text_x']  # [B, C]
-        # embed()
-        # exit()
 
         losses_dict['matching_loss'] = self.loss(image_x, text_x) 
         
         ## enc last frame feat to match caption
         if self.use_enc_feat:
-            # TODO 这里是否过img-encoder的pre_prejection
             enc_feat = image_outs['enc_feats'][0]  # [256, 768]
             # enc_feat /= enc_feat.norm(dim=-1, keepdim=True)
             enc_feat = enc_feat @ self.saliency_projector # [256, 512]
-            # embed()
-            # exit()
             enc_saliency_caption = enc_saliency_caption[:,-1,:].contiguous()
             saliency_text = self.text_encoder(enc_saliency_caption)['x'] # [256, 512]
 
@@ -706,8 +675,7 @@ class MultiLabelContrastive(nn.Module):
             saliency_text = self.text_encoder(enc_saliency_caption)['x'] # [256, 512]
 
             losses_dict['saliency_loss'] = self.loss(saliency_feat, saliency_text) * self.saliency_weight
-            # embed()
-            # exit()
+
         ############################################################
         ### Encode question/answer and calculate masked entity modeling loss (if necessary) ###
         if self.use_entityloss:  # default: False
@@ -734,14 +702,9 @@ class MultiLabelContrastive(nn.Module):
         ############################################################
         ### Encode cross-image and calculate mask loss ###
         if self.use_diceloss:   # default: False  
-            # _mask = image_outs['attn_dicts'][0]['hard'].squeeze(1) # 
-            # pred_mask = image_outs['attn_dicts'][0]['soft'].squeeze(1)
-            ## debug for 3 stages attn maps
             prev_attn_masks = None
             for idx, attn_dict in enumerate(image_outs['attn_dicts']):
                 if attn_dict is None:
-                    # changed doesn't have to be like this
-                    # assert idx == len(results['attn_dicts']) - 1, 'only last layer can be None'
                     continue
                 attn_q = attn_dict['q'].squeeze(1)
                 attn_k = attn_dict['k'].squeeze(1)
@@ -750,42 +713,17 @@ class MultiLabelContrastive(nn.Module):
                 if prev_attn_masks is None:
                     prev_attn_masks = pred_mask
                 else:
-                    # embed()
                     prev_attn_masks = prev_attn_masks @ pred_mask
 
-            ## only for 2 stages group
-            # attn_q = image_outs['attn_dicts'][0]['q'].squeeze(1)
-            # attn_k = image_outs['attn_dicts'][0]['k'].squeeze(1)
-            # pred_mask = self.project_and_mask(attn_q, attn_k)
-            
-            # embed()
-            # exit()
             prev_attn_masks = rearrange(prev_attn_masks, 'b n g -> b g n').contiguous()
             pred_mask = prev_attn_masks.mean(dim=1)
             pred_mask = F.normalize(pred_mask, dim=-1)  # [256, 32]
-
-            # gt_mask = enc_targets.unsqueeze(1)
-            # gt_mask = gt_mask.repeat(1, 8, 1)
             gt_mask = enc_targets   # [256, 32]
-
-            # idx1, idx2 = self.matcher(pred_mask, gt_mask) # idx1, idx2 : [256, 8], [256, 8]
-            # pred_mask = pred_mask[torch.arange(bs).unsqueeze(1), idx1] # [256, 8, x]
-            # gt_mask = gt_mask[torch.arange(bs).unsqueeze(1), idx2] # [256, 8, x]
-            # pred_mask = pred_mask.squeeze(1)
-            # gt_mask = gt_mask.squeeze(1)
-            # grouped_img_tokens = image_outs['image_feat'] # [256, 8, 256]
-            # logit_scale = torch.clamp(self.logit_scale.exp(), max=100)
-            # group_affinity_mat = (grouped_img_tokens @ text_x.unsqueeze(-1)) * logit_scale # [256, 8, 256] @ [256, 256, 1] = [256, 8, 1]
-            # pred_mask = (_mask.permute(0, 2, 1).contiguous() @ group_affinity_mat).squeeze(-1) # [256, 128, 8] @ [256, 8, 1] = [256, 128]
-            ## TODO 也可以使用self.matcher直接匹配预测的结果，[256, 8, 128] 匹配 [256, 1, 128],根据索引输出一个预测结果[256, 1, 128]
 
             ## check pred_mask is nan?
             if torch.any(torch.isnan(pred_mask.sum(-1)) == True):
                 # from datetime import datetime
                 print(pred_mask.cpu().detach(), gt_mask.cpu().detach())
-                # raise RuntimeError("ERROR: Got NaN losses {}".format(datetime.now()))
-            # embed()
-            # exit()
 
             pred_mask = self.min_max_norm(pred_mask) # F.softmax(pred_mask_norm, dim=1) # self.min_max_norm(pred_mask_norm)
             losses_dict['dice_loss'] = dice_loss(pred_mask, gt_mask,) * self.diceloss_weight
@@ -822,8 +760,6 @@ class MultiLabelContrastive(nn.Module):
 
                 
         if self.with_multi_label:  # default: False
-            # embed()
-            # exit()
             image_multi_label_x = image_x.unsqueeze(1) # [256, 1, 256]
             text_multi_label_x = text_outs['text_multi_label_x'] # [256, 2, 256]
             losses_dict['multi_label_loss'] = self.multi_label_loss(image_multi_label_x, text_multi_label_x) * self.multi_label_loss_weight
