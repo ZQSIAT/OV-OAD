@@ -44,7 +44,7 @@ import pickle
 
 tokenizer_dict = {
     # 'Bert': AutoTokenizer.from_pretrained('distilbert-base-uncased', TOKENIZERS_PARALLELISM=False,),
-    'Bert': AutoTokenizer.from_pretrained('/mnt/petrelfs/heyinan/00_zqs/code/ovoad/models/pretrained_models/bert-base-uncased', TOKENIZERS_PARALLELISM=False,),  # load tokenizer from local
+    'Bert': AutoTokenizer.from_pretrained('/mnt/petrelfs/xxx/xxxx/code/ovoad/models/pretrained_models/bert-base-uncased', TOKENIZERS_PARALLELISM=False,),  # load tokenizer from local
     # 'Roberta': RobertaTokenizer.from_pretrained('roberta-base'),
     'TextTransformer': None,
     'CLIPTransformer': clip.tokenize,
@@ -92,24 +92,14 @@ def inference(cfg):
 
     logger = get_logger()
 
-    # data_loader = build_seg_dataloader(build_seg_dataset(cfg.evaluate.seg))
-    # ## one OAD loader
-    # data_loader = build_oad_dataloader(build_oad_dataset(cfg.evaluate.oad))
-    # dataset = data_loader.dataset
-    # logger.info(f'Evaluating dataset: {dataset}')
-
     # TODO: multi datasets zero shot oad val loaders
     datasets_oad = build_oad_dataset(cfg.evaluate.oad)
     data_loaders_oad = build_oad_dataloaders(datasets_oad)
     print(f'Evaluating dataset: {data_loaders_oad.keys()}')
 
-    # embed()
-    # exit()
-
     logger.info(f'Creating model:{cfg.model.type}/{cfg.model_name}')
 
     model = build_model(cfg.model)
-    # model.cuda()
     model = model.to(device)
     logger.info(str(model))
 
@@ -123,12 +113,8 @@ def inference(cfg):
 
     if cfg.model.text_encoder.type == 'Roberta':  # False
         raise NotImplementedError  # TODO
-        # tokenizer = RobertaTokenizer.from_pretrained('/mnt/petrelfs/xujilan/roberta-base/')
-        # print('Done switching roberta tokenizer')
     
     if 'oad' in cfg.evaluate.task:
-        # validate_oad(config=cfg, data_loader=data_loader, model=model, tokenizer=tokenizer)
-        # single_frame_validate_oad(config=cfg, data_loader=data_loader, tokenizer=tokenizer)
         ## multi eval datasets
         mAPs = dict()
         cmAPs = dict()
@@ -143,62 +129,6 @@ def inference(cfg):
     else:
         logger.info('No OAD evaluation specified')
         raise NotImplementedError
-    
-
-    # if cfg.vis:
-    #     vis_seg(cfg, data_loader, model, cfg.vis)
-
-
-# @torch.no_grad()
-# def vis_seg(config, data_loader, model, vis_modes):
-#     dist.barrier()
-#     model.eval()
-    
-#     if hasattr(model, 'module'):
-#         model_without_ddp = model.module
-#     else:
-#         model_without_ddp = model
-
-#     text_transform = build_text_transform(False, config.data.text_aug, with_dc=False)
-#     if config.model.text_encoder['type'] in ['DistilBert', 'Bert','BertMedium','Roberta']:
-#         seg_model = build_seg_inference(model_without_ddp, data_loader.dataset, text_transform, config.evaluate.seg, tokenizer)
-#     else:
-#         seg_model = build_seg_inference(model_without_ddp, data_loader.dataset, text_transform, config.evaluate.seg)
-
-#     mmddp_model = MMDistributedDataParallel(
-#         seg_model, device_ids=[torch.cuda.current_device()], broadcast_buffers=False)
-#     mmddp_model.eval()
-#     model = mmddp_model.module
-#     device = next(model.parameters()).device
-#     dataset = data_loader.dataset
-
-#     if dist.get_rank() == 0:
-#         prog_bar = mmcv.ProgressBar(len(dataset))
-#     loader_indices = data_loader.batch_sampler
-#     for batch_indices, data in zip(loader_indices, data_loader):
-#         with torch.no_grad():
-#             result = mmddp_model(return_loss=False, **data)
-
-#         img_tensor = data['img'][0]
-#         img_metas = data['img_metas'][0].data[0]
-#         imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
-#         assert len(imgs) == len(img_metas)
-
-#         for batch_idx, img, img_meta in zip(batch_indices, imgs, img_metas):
-#             h, w, _ = img_meta['img_shape']
-#             img_show = img[:h, :w, :]
-
-#             ori_h, ori_w = img_meta['ori_shape'][:-1]
-#             img_show = mmcv.imresize(img_show, (ori_w, ori_h))
-
-#             for vis_mode in vis_modes:
-#                 out_file = osp.join(config.output, 'vis_imgs', vis_mode, f'{batch_idx:04d}.jpg')
-#                 model.show_result(img_show, img_tensor.to(device), result, out_file, vis_mode)
-#             if dist.get_rank() == 0:
-#                 batch_size = len(result) * dist.get_world_size()
-#                 for _ in range(batch_size):
-#                     prog_bar.update()    
-
 
 def setup_for_distributed(is_master):
     """
