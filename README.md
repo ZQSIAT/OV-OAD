@@ -9,7 +9,8 @@ This repo takes the initial step towards leveraging text learning for online act
 ## Release Notes
 
 - **[2024/10/04] 🔥 OV-OAD** Code release.
-
+- **[2024/12/11] 🔥 OV-OAD** Open source data processing.
+- **[2024/12/13] 🔥 OV-OAD** Open source training and testing code.
 
 ## Models & Scripts
 
@@ -29,8 +30,24 @@ conda activate ovoad
 
 ### Project Navigation
 Please checkout the following page for more inference & evaluation details.
+#### Data Processing
+```bash
+bash extract_features/run_save_imgs.sh
+bash extract_features/run_extc_feat.sh
+```
 
+#### Pre-training scripts
+```bash
+python -u -m main_pretrain \
+    --cfg configs/enc32_anet_3layers_lsxattn.yml \
+```
 
+#### Review Script
+```bash
+python -u -m main_pretrain \
+    --cfg configs/test_oad.yml \
+    --resume xxx/ovoador_bs256x1/best_map.pth \
+```
 
 ## Citation
 
