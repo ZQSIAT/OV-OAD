@@ -154,97 +154,6 @@ def build_videoclip_dataset(is_train, config):
     print('dataset len: ', len(dataset))
     return dataset
 
-# def collate_fn(batch):  
-#     img = torch.stack([b['image'] for b in batch])
-#     caption = torch.stack([b['caption'] for b in batch])
-#     raw_caption = [b['raw_caption'] for b in batch] 
-    
-#     raw_question = [b['raw_question'] for b in batch] if 'raw_question' in batch[0].keys() else None
-#     raw_answer = [b['raw_answer'] for b in batch] if 'raw_answer' in batch[0].keys() else None
-
-#     cross_image = torch.stack([b['cross_image'] for b in batch]) if 'cross_image' in batch[0].keys() else None
-#     cross_entity = [b['cross_entity'] for b in batch] if 'cross_entity' in batch[0].keys() else None
-    
-#     question = torch.stack([b['question'] for b in batch]) if 'question' in batch[0].keys() and batch[0]['question'] is not None else None
-#     answer = torch.stack([b['answer'] for b in batch]) if 'answer' in batch[0].keys() and batch[0]['answer'] is not None else None
-        
-#     return {    
-#         'image':img,
-#         'caption':caption,
-#         'raw_caption' : raw_caption,
-#         'raw_question': raw_question,
-#         'raw_answer': raw_answer,
-        
-#         'cross_image': cross_image,
-#         'cross_entity': cross_entity, 
-        
-#         'question': question,
-#         'answer': answer,
-#     }
-
-# def build_loader(config):
-#     local_rank = dist.get_rank() % torch.cuda.device_count() if dist.is_initialized() else 0
-
-#     dataset_train = build_videoclip_dataset(is_train=True, config=config)
-#     print(f'local rank {local_rank} / global rank {dist.get_rank()} \
-#         successfully build train dataset')
-#     # embed()
-#     # exit()
-#     dataset_val = build_videoclip_dataset(is_train=False, config=config)
-#     print(f'local rank {local_rank} / global rank {dist.get_rank()} \
-#         successfully build val dataset')
-
-#     sampler_train = torch.utils.data.DistributedSampler(dataset_train, shuffle=True)        
-#     sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-#     print('train batch size: ', config.train.batch_size)
-#     print('val batch size: ', config.val.batch_size)
-#     data_loader_train = torch.utils.data.DataLoader(
-#         dataset_train,
-#         sampler=sampler_train,
-#         batch_size=config.train.batch_size,
-#         num_workers=config.num_workers,
-#         pin_memory=True,
-#         drop_last=True,
-#         persistent_workers=True,
-#         collate_fn=collate_fn, ### NOTEL THIS ###
-#         #shuffle=False,
-#     )
-
-#     data_loader_val = torch.utils.data.DataLoader(
-#         dataset_val,
-#         sampler=sampler_val,
-#         batch_size=config.val.batch_size,
-#         num_workers=config.val.num_workers,
-#         pin_memory=True,
-#         drop_last=False,
-#         persistent_workers=True,
-#     )
-#     return dataset_train, dataset_val, data_loader_train, data_loader_val
-
-# def build_dataset(is_train, config):
-#     img_transform = build_img_transform(is_train, config.img_aug, config.with_dc)
-#     text_transform = build_text_transform(is_train, config.text_aug, config.with_dc)
-#     split = 'train' if is_train else 'val'
-
-#     image_reader = config[split].get('image_reader', {})
-#     dataset = ClipDataset(
-#         root_dir=config[split]['root_dir'],
-#         meta_file=config[split]['meta_file'],
-#         img_transform=img_transform,
-#         text_transform=text_transform,
-#         read_from=config[split]['read_from'],
-#         evaluator=None, # no evaluator for now
-#         image_reader_type=image_reader.get('type', 'pil'),
-#         fseek=config[split].get('fseek',False),
-#         split=split,
-#         cross_image=config[split].get('cross_image', False),
-#         mask_type=config[split].get('mask_type', 'class'),
-#         use_distilbert=config[split].get('use_distilbert', True),
-#         class_label_dir=config[split].get('class_label_dir', None),
-#         sample_list_dir=config[split].get('sample_list_dir', None),
-#     )
-#     print('dataset len: ', len(dataset))
-#     return dataset
 
 def build_img_transform(is_train, config, with_dc=True):
     if not config.deit_aug:
@@ -495,14 +404,7 @@ class WordAugTokenizeWrapper:
                 prompt_texts = [np.random.choice(self.templates).format(verb) for verb in select_verbs]
             else:
                 prompt_texts += [random.choice(texts+["there is background"])] * len_prompts
-            # prompt_texts = []
-            # if len(nouns) > 0:
-            #     select_nouns = np.random.choice(nouns, min(self.max_word, len(nouns)), replace=False)
-            #     prompt_texts = [np.random.choice(self.templates).format(noun) for noun in select_nouns]
-            # if len(prompt_texts) < self.max_word:
-            #     prompt_texts += [text] * (self.max_word - len(prompt_texts))
-            # embed()
-            # exit()
+
             texts = texts + prompt_texts
             if common_caption in texts: # 将出现次数最多的caption放在首位！
                 texts.remove(common_caption)  # 先从列表中移除重点元素
