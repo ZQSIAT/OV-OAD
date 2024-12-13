@@ -62,8 +62,6 @@ class MixerMlp(Mlp):
 
 
 def hard_softmax(logits, dim):
-    # embed()
-    # exit()
     y_soft = logits.softmax(dim)
     # Straight through.
     index = y_soft.max(dim, keepdim=True)[1]
@@ -74,11 +72,6 @@ def hard_softmax(logits, dim):
 
 
 def gumbel_softmax(logits: torch.Tensor, tau: float = 1, hard: bool = False, dim: int = -1) -> torch.Tensor:
-    # _gumbels = (-torch.empty_like(
-    #     logits,
-    #     memory_format=torch.legacy_contiguous_format).exponential_().log()
-    #             )  # ~Gumbel(0,1)
-    # more stable https://github.com/pytorch/pytorch/issues/41663
     gumbel_dist = torch.distributions.gumbel.Gumbel(
         torch.tensor(0., device=logits.device, dtype=logits.dtype),
         torch.tensor(1., device=logits.device, dtype=logits.dtype))
@@ -305,8 +298,6 @@ class GroupingBlock(nn.Module):
             new_x (torch.Tensor): [B, S_2, C], S_2 is the new number of
                 group tokens
         """
-        # embed()
-        # exit()
         group_tokens = self.norm_tokens(group_tokens)  # group_tokens: [256, 8, 768]
         x = self.norm_x(x)  # x: [256, 32, 768]
         # [B, S_2, C]
@@ -314,14 +305,8 @@ class GroupingBlock(nn.Module):
         projected_group_tokens = self.pre_assign_attn(projected_group_tokens, x) # projected_group_tokens: [256, 2, 768], x: [256, 32, 768]
 
         new_x, attn_dict = self.assign(projected_group_tokens, x, return_attn=return_attn)  
-        # new_x: [256, 2, 768], attn_dict['q']: [256, 1, 2, 768], attn_dict['k']: [256, 1, 32, 768]
-        # attn_dict['soft']: [256, 1, 2, 32], attn_dict['hard']: [256, 1, 2, 32]
 
         new_x += projected_group_tokens
-        # TODO
-        # 添加第二阶段group token和第0阶段x token之间的pre assign 和 assign
-
-
         new_x = self.reduction(new_x) + self.mlp_channels(self.norm_new_x(new_x))
 
         return new_x, attn_dict
@@ -664,19 +649,6 @@ class GroupingLayer(nn.Module):
                 self.long_term_compress_fn = nn.Identity()
 
         self.mask = None
-
-        ## mask group token and image token 
-        # if False and mask_flag:
-        #     full_shape = [1, 1, enc_steps+num_group_token, enc_steps+num_group_token]
-        #     with torch.no_grad():
-        #         self.mask = torch.triu(torch.ones(full_shape, dtype=torch.bool), diagonal=1).cuda()
-
-        # print(mask_flag, enc_steps, num_group_token, '\n')
-        # True 32 16 
-        # False 32 8 
-        # False 32 0  
-        ## mask image token only in layer0 
-        # 需要mask的位置为true，对应1，，不需要mask的位置为false，对应为0
         if mask_flag: 
             if only_mask_short and self.enc_feat_lsxattn: # disconnect the long short memory, and only mask short term frames
                 short_term_shape = [1, 1, self.short_term_len, self.short_term_len]
@@ -686,18 +658,12 @@ class GroupingLayer(nn.Module):
                 enc_shape = [1, 1, enc_steps, enc_steps]
                 with torch.no_grad():
                     self.mask = torch.zeros(enc_shape, dtype=torch.bool).cuda()  # [1, 1, 32, 32], all false
-
                     long_mask = torch.zeros(long_term_shape, dtype=torch.bool).cuda()  # [1, 1, 24, 24], all false
                     short_mask = torch.triu(torch.ones(short_term_shape, dtype=torch.bool), diagonal=1).cuda()  # [1, 1, 8, 8], 右上为true，左下为false
                     long_x_short_mask = torch.ones(long_x_short_shape, dtype=torch.bool).cuda()
-                    # short_x_long_mask = torch.ones(short_x_long_shape, dtype=torch.bool).cuda()  # do not mask short x long 
-
                     self.mask[:,:, :-self.short_term_len, :-self.short_term_len] = long_mask
                     self.mask[:,:, -self.short_term_len:, -self.short_term_len:] = short_mask
                     self.mask[:,:, :-self.short_term_len, -self.short_term_len:] = long_x_short_mask  # [1, 1, 24, 8]
-                    # self.mask[:,:, -self.short_term_len:, :-self.short_term_len] = short_x_long_mask  # [1, 1, 8, 24]
-                # embed()
-                # exit()
             else: 
                 full_shape = [1, 1, enc_steps+num_group_token, enc_steps+num_group_token]
                 mask_shape = [1, 1, enc_steps, enc_steps]
@@ -705,8 +671,6 @@ class GroupingLayer(nn.Module):
                     self.mask = torch.zeros(full_shape, dtype=torch.bool).cuda()
                     _mask = torch.triu(torch.ones(mask_shape, dtype=torch.bool), diagonal=1)
                     self.mask[:,:, :enc_steps, :enc_steps] = _mask
-            # embed()
-            # exit()
     @property
     def with_group_token(self):
         return self.group_token is not None
@@ -747,7 +711,7 @@ class GroupingLayer(nn.Module):
 
         for blk_idx, blk in enumerate(self.blocks):
             if self.use_checkpoint:
-                cat_x = checkpoint.checkpoint(blk, cat_x)  # 在模型的前向传播过程中进行内存优化
+                cat_x = checkpoint.checkpoint(blk, cat_x)  
             else:
                 cat_x = blk(cat_x, mask=self.mask)
 
@@ -755,30 +719,22 @@ class GroupingLayer(nn.Module):
         enc_x = None
         if self.use_enc_feat and self.i_layer == 0:
             if self.enc_feat_lsxattn:
-                if self.long_term_detach:  # 33.7 up to 33.8  # TODO !!
+                if self.long_term_detach:  
                     long_term_feats, short_term_feats = x[:, :-self.short_term_len, :].clone().detach().contiguous(), x[:, -self.short_term_len:, :].clone().detach().contiguous()
                 else:
-                    long_term_feats, short_term_feats = x[:, :-self.short_term_len, :].clone().contiguous(), x[:, -self.short_term_len:, :].clone().contiguous()  # TODO
-                
-                # long_term_feats = self.long_term_compress_fn(long_term_feats.transpose(1, 2)).transpose(1, 2)  # compress the long term mempry!
-
+                    long_term_feats, short_term_feats = x[:, :-self.short_term_len, :].clone().contiguous(), x[:, -self.short_term_len:, :].clone().contiguous()
                 short_term_feats = self.long_short_xattn(query=short_term_feats, key=long_term_feats)
                 enc_x = short_term_feats[:,-1,:].contiguous()
             else:
                 if self.long_term_detach:
-                    # embed()
-                    # exit()
+
                     enc_x = x[:,-1,:].clone().detach().contiguous()
                 else:
                     enc_x = x[:,-1,:].clone().contiguous() # last enc frame [256, 768 ] 
 
-        # embed()
-        # exit()
         attn_dict = None
         if self.downsample is not None:
             x, attn_dict = self.downsample(x, group_token, return_attn=return_attn)
-        # print(f"x.shape {x.shape}, group_token.shape {group_token.shape if group_token is not None else None}")
-        # print("#"*100)
         return x, group_token, attn_dict, enc_x
 
 
@@ -878,7 +834,7 @@ class GroupViT(nn.Module):
                  pretrained=True,
                  fixed=False,
                  parallel = False,
-                 imgnet_pretrained_checkpoint='/mnt/petrelfs/xujilan/checkpoints/dino_vitbase16_pretrain.pth',
+                 imgnet_pretrained_checkpoint='/mnt/petrelfs/xxx/checkpoints/dino_vitbase16_pretrain.pth',
                  no_patch_embed=True,
                  enc_steps=128,
                  long_term_steps=0,   # default: -1, not use long term memory! others for long term frames.
@@ -1092,8 +1048,6 @@ class GroupViT(nn.Module):
             self.init_backbone_with_imagenet_weights(imgnet_pretrained_checkpoint)
             ### drop cls_token ###
             self.pos_embed = nn.Parameter(self.pos_embed[0, 1:])
-        
-
 
     def init_backbone_with_imagenet_weights(self, checkpoint_path):
         if self.imgnet_pretrained == 'imgnet':
@@ -1332,8 +1286,6 @@ class GroupViT(nn.Module):
                 if 'position_embeddings' in newkey:
                     newkey = newkey.replace('embeddings.position_embeddings.weight', 'pos_embed')
                     newdict[newkey] = vv.unsqueeze(0)
-        # embed()
-        # exit()
 
         ### init all self-attn/pos_embed/patch_embed layers ###
         msg = self.load_state_dict(newdict, strict=False)
@@ -1343,12 +1295,9 @@ class GroupViT(nn.Module):
                 if n in newdict and n != "pos_embed": # TODO open pos enc
                     p.requires_grad = False
                     print('Freezing parameter: ', n)
- 
+
         print(msg)
         print('$' * 100)
-
-        # embed()
-        # exit()
 
     def load_state_dict(self, state_dict: 'OrderedDict[str, torch.Tensor]', strict: bool = True):
 
@@ -1356,8 +1305,6 @@ class GroupViT(nn.Module):
             load_pos_embed = state_dict['pos_embed']  # [1, 197, 768]
             pos_embed = self.pos_embed  # [1, 128, 768]
             length_pos_embed = pos_embed.shape[1]
-            # embed()
-            # exit()
             if load_pos_embed.shape != pos_embed.shape:
                 load_pos_embed = load_pos_embed.transpose(1, 2).contiguous()
                 load_pos_embed = F.interpolate(load_pos_embed, size=(length_pos_embed), mode='nearest')
@@ -1436,10 +1383,6 @@ class GroupViT(nn.Module):
 
         
     def forward_features(self, x, *, return_attn=False):
-        # TODO
-        # vision_transformer from clip.model <= adpater(模仿 text_encoder)
-        # embed()
-        # exit()
         if len(x.shape) == 5:
             B, N, C, H, W= x.shape
             x = x.reshape(B*N, C ,H ,W)
@@ -1460,20 +1403,17 @@ class GroupViT(nn.Module):
             x = x + self.get_pos_embed(B, *hw_shape)
 
         ## TODO: nothing todo about the frames features?
-
         x = self.pos_drop(x)
 
         group_token = None
         attn_dict_list = []
         enc_feats = []
-        # 将x保存下来，TODO
+
         for i, layer in enumerate(self.layers):
             if self.switch_off_layer0 and i == 0:
                 _x, _group_token, attn_dict, enc_x = layer(x, group_token, return_attn=return_attn)
             else:
                 x, group_token, attn_dict, enc_x = layer(x, group_token, return_attn=return_attn)
-
-            # x, group_token, attn_dict, enc_x = layer(x, group_token, return_attn=return_attn)
             if attn_dict is not None:
                 attn_dict_list.append(attn_dict)
             if enc_x is not None:
@@ -1509,40 +1449,14 @@ class GroupViT(nn.Module):
 
         if return_attn:
             outs.append(attn_dicts, name='attn_dicts')
-
-        # embed()
-        # exit()
         return outs.as_return()
 
 
 if __name__ == "__main__":
     from IPython import embed
     image = torch.randn(16,128,384).cuda()
-    # img_encoder = GroupViT(depths=[6, 3, 3], embed_factors=[1, 1, 1], num_group_tokens=[64, 8, 0], num_output_groups=[64, 8])
     img_encoder = GroupViT(num_heads=[8, 8], depths=[6, 6], embed_factors=[1, 1], num_group_tokens=[64, 0], num_output_groups=[8], batch_size=16).cuda()
 
     img_encoder.eval()
     img_outs = img_encoder(image, return_feat=True, as_dict=True, return_attn=True)
-    # print(f"img_outs.keys(): {img_outs.keys()},\n img_outs['attn_dicts']: {img_outs['attn_dicts']}")
-    # embed()
-    pass
-    """
-    In [4]: attn_dicts[0]['soft'].shape
-    Out[4]: torch.Size([16, 1, 8, 196])
-    In [5]: attn_dicts[0]['hard'].shape
-    Out[5]: torch.Size([16, 1, 8, 196])
-    In [6]: attn_dicts[0]['rawq'].shape
-    Out[6]: torch.Size([16, 8, 384])
-    In [7]: attn_dicts[0]['q'].shape
-    Out[7]: torch.Size([16, 1, 8, 384])
-    In [9]: img_outs['feat'].shape
-    Out[9]: torch.Size([16, 8, 384])
-    In [10]: img_outs['x'].shape
-    Out[10]: torch.Size([16, 384])
-    x.shape torch.Size([16, 196, 384]), group_token.shape torch.Size([16, 64, 384])
-    x.shape torch.Size([16, 8, 384]), group_token.shape torch.Size([16, 64, 384])
-    ****************************************************************************************************
-    x.shape torch.Size([16, 8, 384]), group_token.shape None
-    x.shape torch.Size([16, 8, 384]), group_token.shape None
-    ****************************************************************************************************
-    """
+    
