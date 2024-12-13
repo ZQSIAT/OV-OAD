@@ -42,7 +42,7 @@ python -u -m main_pretrain \
     --cfg configs/enc32_anet_3layers_lsxattn.yml \
 ```
 
-#### Review Script
+#### Evaluation Script
 ```bash
 python -u -m main_pretrain \
     --cfg configs/test_oad.yml \
