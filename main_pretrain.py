@@ -71,7 +71,7 @@ import clip
 
 tokenizer_dict = {
     # 'Bert': AutoTokenizer.from_pretrained('distilbert-base-uncased', TOKENIZERS_PARALLELISM=False,),
-    'Bert': AutoTokenizer.from_pretrained('/mnt/petrelfs/zhaoqingsong/code/ovoad/models/pretrained_models/bert-base-uncased', TOKENIZERS_PARALLELISM=False,),  # load tokenizer from local
+    'Bert': AutoTokenizer.from_pretrained('/mnt/petrelfs/xxxx/code/ovoad/models/pretrained_models/bert-base-uncased', TOKENIZERS_PARALLELISM=False,),  # load tokenizer from local
     'TextTransformer': None,
     'CLIPTransformer': clip.tokenize,
 }
@@ -146,10 +146,7 @@ def train(cfg):
     datasets_oad = build_oad_dataset(cfg.evaluate.oad)
     data_loaders_oad = build_oad_dataloaders(datasets_oad)
     print(f'Evaluating dataset: {data_loaders_oad.keys()}')
-
     # a = datasets_oad['tvseries'].__getitem__(0)
-    # embed()
-    # exit()
 
     ## perform single frame eval
     if cfg.single_eval:
@@ -169,8 +166,6 @@ def train(cfg):
     print('Done pretrain loader')
 
     # dataset_train.__getitem__(206)
-    # embed()
-    # exit()
 
     optimizer = build_optimizer(cfg.train, model)
     scaler = torch.cuda.amp.GradScaler(enabled=True)  # True : fp16
@@ -219,20 +214,12 @@ def train(cfg):
     for epoch in range(cfg.train.start_epoch, cfg.train.epochs):
         ### train model ###
         loss_train_dict = train_one_epoch(cfg, device, model, data_loader_train, optimizer, scaler, epoch, lr_scheduler, writer)
-        # if dist.get_rank() == 0 and (epoch % cfg.checkpoint.save_freq == 0 or epoch == (cfg.train.epochs - 1)):
-        #     save_checkpoint(cfg, epoch, model_without_ddp, {
-        #         'max_cmAP': max_cmAP,
-        #         'max_mAP': max_mAP,
-        #     }, optimizer, lr_scheduler, scaler)
-        # dist.barrier()
         loss_train = loss_train_dict['total_loss']
         logger.info(f'Avg loss of the network on the {len(dataset_train)} train images: {loss_train:.2f}')
                 
         # evaluate TODO: not eval mode
         if (epoch % cfg.evaluate.eval_freq == 0 or epoch == (cfg.train.epochs - 1)):
             if 'oad' in cfg.evaluate.task:
-                # mAP, cmAP = validate_oad(cfg, data_loader_oad, model_without_ddp, epoch, writer, tokenizer=tokenizer)
-                # logger.info(f'mAP of the network on the {len(dataset_oad)} test instances: {mAP:.1f}%, {cmAP:.1f}%')
                 mAPs = dict()
                 cmAPs = dict()
                 for data_name, dataloader in data_loaders_oad.items():
@@ -244,25 +231,15 @@ def train(cfg):
                     
                 max_metrics['max_mAP'] = {key: max(max_mAP[key], mAPs[key]) for key in max_mAP} 
                 max_metrics['max_cmAP'] = {key: max(max_cmAP[key], cmAPs[key]) for key in max_cmAP} 
-                # max_metrics['max_mAP'] = max(max_metrics['max_mAP'], mAP)
-                # exists_max_map = any(mAPs.get(key, float('-inf')) > value for key, value in max_mAP.items())
-                # exists_max_cmap = any(cmAPs.get(key, float('-inf')) > value for key, value in max_cmAP.items())
-                # exists_max_map, max_data_name = check_max_map(mAPs, max_mAP)
-                # exists_max_cmap, max_key = check_max_map(cmAPs, max_cmAP)
-                # if cfg.evaluate.oad.save_best and dist.get_rank() == 0 and mAP >= max_mAP:
-                # if cfg.evaluate.oad.save_best and dist.get_rank() == 0 and exists_max_map:
-                #     save_checkpoint(cfg, epoch, model_without_ddp, max_metrics, optimizer, lr_scheduler, scaler, suffix=f'{max_data_name}_best_map')
 
                 if cfg.evaluate.oad.save_best and dist.get_rank() == 0:
                     for key, value in max_mAP.items():
                         if mAPs.get(key, float('-inf')) > value:
                             save_checkpoint(cfg, epoch, model_without_ddp, max_metrics, optimizer, lr_scheduler, scaler, suffix=f'{key}_best_map')
                 dist.barrier()
-                # embed()
-                # exit()
+
                 max_mAP = max_metrics['max_mAP']
                 max_cmAP = max_metrics['max_cmAP']
-                # logger.info(f'Max_mAP: {max_mAP:.4f}%, Max_cmAP: {max_cmAP:.4f}%.')
                 logger.info(f'\n Max_mAP: {max_mAP}, \n Max_cmAP: {max_cmAP}.')
 
         if wandb is not None:  # default : False
@@ -284,8 +261,6 @@ def train(cfg):
     # writer.flush()
 
 def process_text(cfg, text_data):
-    # embed()
-    # exit()
     if cfg.model.text_encoder['type'] in ['DistilBert','Bert','BertMedium','Roberta']:
         ### we run all the exps with padding=True, meaning padding to the longest caption ###
         # text_data = tokenizer(text_data, return_tensors='pt', padding=True,
@@ -300,14 +275,10 @@ def process_text(cfg, text_data):
         text_data = tokenizer(text_data, truncate=True, context_length=77).cuda() # [256, 77]
     else:   
         text_data = text_data.cuda()
-    # embed()
-    # exit()
     return text_data
 
                     
 def generate_entity_masks(text_data):
-    # embed()
-    # exit()
     if type(text_data) is not dict:
         text = text_data
     else:
@@ -338,9 +309,6 @@ def train_one_epoch(config, device, model, data_loader, optimizer, scaler, epoch
 
     start = time.time()
     end = time.time()
-
-    # text_transform = build_text_transform(False, config.data.text_aug, with_dc=False)
-    
     for idx, samples in enumerate(data_loader):        
         batch_size = config.data.train.batch_size
         # all_images = samples['camera_inputs'].cuda()
@@ -351,47 +319,17 @@ def train_one_epoch(config, device, model, data_loader, optimizer, scaler, epoch
         entity_labels = entity_masks =  None
         all_answers = None
 
-        ## 默认只执行第一个if语句
-        # if config.model.text_encoder['type'] in ['DistilBert','Bert','BertMedium','Roberta','CLIPTransformer']:
-        # embed()
-        # exit()
-
         all_texts = process_text(cfg=config, text_data=samples['enc_raw_caption']) # for multi captions text_data: [256, 3, 77]
         if config.data.train.use_entity is True:  # default: False
             all_questions = process_text(config, samples['raw_question'])
             all_answers= process_text(config, samples['raw_answer'])
-            # embed()
-            # exit()
-            # entity_masks = generate_entity_masks(all_questions)
             entity_masks= None # not used
         if config.data.train.use_saliency or config.data.train.use_enc_feat:
-            # embed()
-            # exit()
             enc_saliency_caption = process_text(config, samples['enc_saliency_caption'])
 
-        # else:
-        #     raise NotImplementedError
-        # elif config.model.text_encoder['type'] not in ['TextTransformer'] and config.data.train.use_entity is True:
-        #     all_texts = samples['caption'].cuda()
-        #     all_questions = samples['question'].cuda()
-        #     all_answers = samples['answer'].cuda()
-        # else:
-        #     all_texts = samples['caption'].cuda()
-        ### for cross-image mask consistency loss ###
-        # all_crossimage = samples['cross_image'].cuda() if 'cross_image' in samples and samples['cross_image'] is not None else None
-        # question_masks = samples['question_mask'].cuda() if 'question_mask' in samples else None
-        # cross_entity = process_text(samples['cross_entity']) if 'cross_entity' in samples and samples['cross_entity'] is not None else None
-
-        ### forward and compute loss ###
-        # losses = model(image=all_images, text=all_texts, cross_image=all_crossimage, cross_entity=cross_entity, \
-        #                 question=all_questions, answer=all_answers, entity_masks=entity_masks, question_masks=question_masks)
-            
         ## TODO: default: only contras loss
         with torch.cuda.amp.autocast(enabled=True):  # fp16 
-            # losses = model(image=all_images, text=all_texts, enc_targets=enc_caption_mask)
             losses = model(image=all_images, text=all_texts, enc_saliency_caption=enc_saliency_caption, question=all_questions, answer=all_answers, entity_masks=entity_masks, enc_targets=enc_caption_mask)
-            # embed()
-            # exit()
             loss, log_vars = parse_losses(losses)
         
         if dist.get_rank() == 0:
@@ -405,8 +343,6 @@ def train_one_epoch(config, device, model, data_loader, optimizer, scaler, epoch
 
 
         optimizer.zero_grad()
-        # embed()
-        # exit()
         scaler.scale(loss).backward()
 
         # # 裁剪梯度 TODO
@@ -415,12 +351,8 @@ def train_one_epoch(config, device, model, data_loader, optimizer, scaler, epoch
 
         scaler.step(optimizer)
         scaler.update()
-        # optimizer.step()
         lr_scheduler.step_update(epoch * num_steps + idx)
-        # if config.model.use_maskloss:  # default: False
-        #         maskloss_coeff = 0.99
-        #         momentum_update(model.module.img_encoder, model.module.img_encoder_momentum, maskloss_coeff)
-
+      
         torch.cuda.synchronize()
         loss_meter.update(loss.item(), batch_size)
         for loss_name in log_vars:
@@ -473,7 +405,6 @@ def validate_oad(config, device, data_loader, model, epoch=0, writer=None, token
     else:
         model_without_ddp = model
 
-    # text_transform传入build_oad_inference但不会使用
     text_transform = build_text_transform(False, config.data.text_aug, with_dc=False)  
     if config.model.text_encoder['type'] in ['DistilBert', 'Bert','BertMedium','Roberta', 'CLIPTransformer']:
         oad_model = build_oad_inference(model_without_ddp, data_loader.dataset, text_transform, config.evaluate.oad, tokenizer)
@@ -490,25 +421,18 @@ def validate_oad(config, device, data_loader, model, epoch=0, writer=None, token
     all_probs, all_classes, all_fixed_saliency, all_online_saliency, all_enc_feat = [], [], [], [], []
     for idx, (camera_inputs, targets, saliency_current) in enumerate(data_loader):
         all_images = camera_inputs.to(device, non_blocking=True)  # torch.Size([B, 128, 512])
-        # print("oad:", all_images.shape)
         target_val = targets.to(device, non_blocking=True) # torch.Size([B, 128, 21])
         saliency_current = saliency_current.to(device, non_blocking=True)
         # target_val  = target_val.view(-1, 21).contiguous()
         target_val = targets[:, -1, :].squeeze(1).to(device, non_blocking=True).contiguous().float() # get last frame
 
         with torch.cuda.amp.autocast(enabled=True):
-            # logits_dict = mmddp_model(feats=all_images[:,-24:,:])
             logits_dict = mmddp_model(feats=all_images) # {"temporal": outputs, "saliency": saliency_logits} # B L C -> [256, 128, 21], B C -> [256, 21]
         logits = logits_dict["temporal"]
         saliency_logits = logits_dict["saliency"]
         enc_feat_logits = logits_dict["enc_feat_logits"]
-        # embed()
-        # exit()
-        # target_val  = target_val.max(1).values
-        # logits = logits.max(1).values
-        # logits = logits.mean(1).contiguous()
+
         logits = logits[:, -1, :].squeeze(1).contiguous()
-        # logits  = logits.view(-1, 21).contiguous()
 
         logits_gather_list = [torch.zeros_like(logits) for _ in range(num_tasks)]
         torch.distributed.all_gather(logits_gather_list, logits)
@@ -548,12 +472,6 @@ def validate_oad(config, device, data_loader, model, epoch=0, writer=None, token
                         f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                         f'Mem {memory_used:.0f}MB')
 
-    # embed()
-    # exit()
-    # targets = torch.argmax(torch.tensor(np.asarray(all_classes)), dim=1)
-    # ce_loss = F.cross_entropy(torch.tensor(np.asarray(all_probs)).float(), targets)
-    # logger.info(f"ce_loss: {ce_loss.item()}")
-
     all_probs = np.asarray(all_probs).T 
     logger.info(f"all_probs.shape {str(all_probs.shape)}") 
     all_classes = np.asarray(all_classes).T 
@@ -566,29 +484,20 @@ def validate_oad(config, device, data_loader, model, epoch=0, writer=None, token
     if len(all_online_saliency) > 0:
         all_online_saliency = np.asarray(all_online_saliency).T 
         logger.info(f"all_online_saliency.shape {str(all_online_saliency.shape)}")
-        mean_fusion = np.mean(np.stack([all_probs, all_fixed_saliency, all_online_saliency]), axis=0) # 27.2
-        # mean_fusion = np.mean(np.stack([all_probs, all_online_saliency]), axis=0)
+        mean_fusion = np.mean(np.stack([1.6*all_probs, 0.2*all_fixed_saliency, 0.5*all_online_saliency]), axis=0) 
 
     if len(all_enc_feat) > 0:
         all_enc_feat = np.asarray(all_enc_feat).T 
         logger.info(f"all_enc_feat.shape {str(all_enc_feat.shape)}")
-        mean_fusion = np.mean(np.stack([all_probs, all_fixed_saliency, all_enc_feat]), axis=0) # 23.3
-        # mean_fusion = np.mean(np.stack([all_probs, 0.4*all_fixed_saliency, 0.1*all_enc_feat]), axis=0)  # 30.15->30.89
-        # mean_fusion = np.mean(np.stack([1.5*all_probs, 0.2*all_fixed_saliency, 0.1*all_enc_feat]), axis=0)  # 35.3->36.3
-        # mean_fusion = np.mean(np.stack([1.6*all_probs, 0.2*all_fixed_saliency, 0.1*all_enc_feat, 0.75*all_online_saliency]), axis=0)  # 35.3 -> 37.5
-    
+        mean_fusion = np.mean(np.stack([all_probs, all_fixed_saliency, all_enc_feat]), axis=0) 
+
     results = {'probs': mean_fusion, 'labels': all_classes}
-    # results = {'probs': all_probs, 'labels': all_classes}
-    embed()
-    exit()
 
     # measure map cmap
     metric = frame_level_map_n_cap(results=results, with_bg=False) # 不统计BG类别
 
     ap_nan_count = np.sum(np.isnan(metric['all_cls_ap']))
-    # ap_mean_value = np.nanmean(metric['all_cls_ap'])
     cap_nan_count = np.sum(np.isnan(metric['all_cls_acp']))
-    # cap_mean_value = np.nanmean(metric['all_cls_acp'])
     len_classes = len(data_loader.dataset.CLASSES)
 
     if ap_nan_count > 0:
@@ -599,18 +508,10 @@ def validate_oad(config, device, data_loader, model, epoch=0, writer=None, token
     for i, ap in enumerate(metric['all_cls_ap']):
         cls_name = data_loader.dataset.CLASSES[i+1] # with_bg=False
         logger.info('{}: {:.4f}'.format(cls_name, ap))
-
-    # for i, cap in enumerate(metric['all_cls_acp']):
-    #     cls_name = data_loader.dataset.CLASSES[i+1]
-    #     logger.info('{}: {:.4f}'.format(cls_name, cap))
-    # embed()
-    # exit()
         
     mAP = metric['map']*100
     cmAP = metric['cap']*100
     logger.info('[Epoch-{}] [Dataset-{}] mAP: {:.2f}/% means map: {:.2f}/%\n'.format(epoch, data_loader.dataset.data_name, mAP, cmAP))
-    # embed()
-    # exit()
     out = [mAP, cmAP]
     torch.cuda.empty_cache()
     logger.info('Clearing zero shot classifier')
@@ -620,260 +521,6 @@ def validate_oad(config, device, data_loader, model, epoch=0, writer=None, token
     dist.barrier()
     return out
 
-
-@torch.no_grad()
-def validate_oad_results(config, data_loader, model, epoch=0, writer=None, tokenizer=None):
-    device = torch.device(config.device)
-    num_tasks = dist.get_world_size()
-    logger = get_logger()
-    dist.barrier()
-    model.eval()
-
-    batch_time = AverageMeter()
-
-    if hasattr(model, 'module'):
-        model_without_ddp = model.module
-    else:
-        model_without_ddp = model
-
-    # text_transform传入build_oad_inference但不会使用
-    text_transform = build_text_transform(False, config.data.text_aug, with_dc=False)  
-    if config.model.text_encoder['type'] in ['DistilBert', 'Bert','BertMedium','Roberta', 'CLIPTransformer']:
-        oad_model = build_oad_inference(model_without_ddp, data_loader.dataset, text_transform, config.evaluate.oad, tokenizer)
-    else:
-        oad_model = build_oad_inference(model_without_ddp, data_loader.dataset, text_transform, config.evaluate.oad)
-
-    mmddp_model = MMDistributedDataParallel(
-        oad_model, device_ids=[torch.cuda.current_device()], broadcast_buffers=True)
-    mmddp_model.eval()
-    end = time.time()
-    logger.info('Zero shot oad model built!')
-
-    all_probs, all_classes = [], []
-    for idx, (camera_inputs, targets) in enumerate(data_loader):
-        all_images = camera_inputs.to(device, non_blocking=True)  # torch.Size([B, 128, 512])
-        target_val = targets.to(device, non_blocking=True) # torch.Size([B, 128, 21])
-        # target_val  = target_val.view(-1, 21).contiguous()
-        target_val = targets[:, -1, :].squeeze(1).to(device, non_blocking=True).contiguous() # get last frame
-
-        logits = mmddp_model(feats=all_images)
-        # embed()
-        # exit()
-        # target_val  = target_val.max(1).values
-        # logits = logits.max(1).values
-        # logits = logits.mean(1).contiguous()
-        logits = logits[:, -1, :].squeeze(1).contiguous()
-        # logits  = logits.view(-1, 21).contiguous()
-
-        logits_gather_list = [torch.zeros_like(logits) for _ in range(num_tasks)]
-        torch.distributed.all_gather(logits_gather_list, logits)
-        logits = torch.cat(logits_gather_list, dim=0)
-        targets_gather_list = [torch.zeros_like(target_val) for _ in range(num_tasks)]
-        torch.distributed.all_gather(targets_gather_list, target_val)
-        target_val = torch.cat(targets_gather_list, dim=0)
-        all_probs.extend(logits.detach().cpu().numpy())  
-        all_classes.extend(target_val.detach().cpu().numpy())
-
-        # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
-        if idx % config.print_freq == 0:
-            memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
-            logger.info(f'Test: [{idx}/{len(data_loader)}]\t'
-                        f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                        f'Mem {memory_used:.0f}MB')
-
-        # break # for debug
-    # embed()
-    # exit()
-            
-    # 将one-hot向量转换为类别索引的长整型张量
-    targets = torch.argmax(torch.tensor(np.asarray(all_classes)), dim=1)
-
-    # 计算损失
-    ce_loss = F.cross_entropy(torch.tensor(np.asarray(all_probs)).float(), targets)
-
-    # 打印损失
-    logger.info(f"ce_loss: {ce_loss.item()}")
-    all_probs = np.asarray(all_probs).T 
-    logger.info(f"all_probs.shape {str(all_probs.shape)}") 
-    import pickle
-    with open('thumos_clip_b16_enc32_all_probs_saliency.pickle', 'rb') as file:
-        saliency_probs = pickle.load(file)
-    logger.info(f"pickle load thumos_clip_b16_enc32_all_probs_saliency.pickle succes!")
-    mean_fusion = np.mean(np.stack([all_probs, saliency_probs]), axis=0)
-    all_classes = np.asarray(all_classes).T 
-    logger.info(f"all_classes.shape {str(all_classes.shape)}")
-    results = {'probs': mean_fusion, 'labels': all_classes}
-    torch.cuda.empty_cache()
-    logger.info('Clearing zero shot classifier')
-    dist.barrier()
-    return results
-
-
-@torch.no_grad() # trun to 00_vindlu/exp/zero-shot-oad/CLIP_ZS_THUMOS14_V10/zero_shot_oad_trainer.py
-def single_frame_validate_oad(config, device, data_loader, epoch=0, writer=None, tokenizer=None):
-    num_tasks = dist.get_world_size()
-    logger = get_logger()
-    dist.barrier()
-
-    batch_time = AverageMeter()
-
-    if config.model.text_encoder['type'] in ['DistilBert', 'Bert','BertMedium','Roberta', 'CLIPTransformer']:
-        oad_model = build_single_frame_oad_inference(data_loader.dataset, config.evaluate.oad, tokenizer)
-    else:
-        raise NotImplementedError
-
-    mmddp_model = MMDistributedDataParallel(
-        oad_model, device_ids=[torch.cuda.current_device()], broadcast_buffers=True) 
-    mmddp_model.eval()
-    end = time.time()
-    logger.info('Zero shot oad model built!')
-
-    all_probs, all_classes = [], []
-    for idx, (camera_inputs, targets) in enumerate(data_loader):
-        # embed()
-        # exit()
-        if config.data.train.long_term_steps > 0:
-            camera_inputs = camera_inputs[:,config.data.train.long_term_steps:,:].contiguous()
-
-        if config.evaluate.oad.eval_type == "single":
-            all_images = camera_inputs[:, -1, :].squeeze(1).to(device, non_blocking=True)  # torch.Size([B, 128, 512])
-        elif "means" in config.evaluate.oad.eval_type:
-            all_images = camera_inputs.to(device, non_blocking=True)
-        else:
-            raise NotImplementedError
-        # target_val = targets.to(device, non_blocking=True) # torch.Size([B, 128, 21])
-        # target_val  = target_val.view(-1, 21).contiguous()
-        target_val = targets[:, -1, :].squeeze(1).to(device, non_blocking=True).contiguous().float() # get last frame
-
-        with torch.cuda.amp.autocast(enabled=True): 
-            logits = mmddp_model(all_images)
-
-        # embed()
-        # exit()
-
-        if config.evaluate.oad.eval_type == "single":
-            logits = logits.squeeze(1).contiguous()
-        elif config.evaluate.oad.eval_type == "means":
-            logits = logits.mean(1).contiguous()
-        elif config.evaluate.oad.eval_type == "kmeans":
-            logits = logits[:,-16:,:].mean(1).contiguous()
-        else:
-            raise NotImplementedError
-        # logits  = logits.view(-1, 21).contiguous()
-
-
-        logits_gather_list = [torch.zeros_like(logits) for _ in range(num_tasks)]
-        torch.distributed.all_gather(logits_gather_list, logits)
-        logits = torch.cat(logits_gather_list, dim=0)
-
-        targets_gather_list = [torch.zeros_like(target_val) for _ in range(num_tasks)]
-        torch.distributed.all_gather(targets_gather_list, target_val)
-        target_val = torch.cat(targets_gather_list, dim=0)
-
-        all_probs.extend(logits.detach().cpu().numpy())  
-        all_classes.extend(target_val.detach().cpu().numpy())
-
-        # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
-        if idx % config.print_freq == 0:
-            memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
-            logger.info(f'Test: [{idx}/{len(data_loader)}]\t'
-                        f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                        f'Mem {memory_used:.0f}MB')
-    # embed()
-    # exit()
-    all_probs = np.asarray(all_probs).T 
-    logger.info(f"all_probs.shape {str(all_probs.shape)}") 
-    if config.single_eval:
-        # save_name = f"models/{config.evaluate.oad.eval_type}_saliency_probs/{data_loader.dataset.data_name}_clip_b16_enc{config.data.train.enc_steps}_long{config.data.train.long_term_steps}_{data_loader.dataset.class_type}_probs_saliency.npy"
-        # np.save(save_name, all_probs)
-        # np.save('ek100_clip_b16_enc32_all_probs_saliency.npy', all_probs) 
-        # /mnt/petrelfs/heyinan/00_zqs/code/ovoad/models/means_saliency_probs
-        # /mnt/petrelfs/heyinan/00_zqs/code/ovoad/models/single_saliency_probs
-        pass
-    all_classes = np.asarray(all_classes).T 
-    logger.info(f"all_classes.shape {str(all_classes.shape)}")
-    results = {'probs': all_probs, 'labels': all_classes}
-
-    # measure map cmap
-    metric = frame_level_map_n_cap(results=results, with_bg=False) # with_bg=False 不统计BG类别
-
-    ap_nan_count = np.sum(np.isnan(metric['all_cls_ap']))
-    # ap_mean_value = np.nanmean(metric['all_cls_ap'])
-    cap_nan_count = np.sum(np.isnan(metric['all_cls_acp']))
-    # cap_mean_value = np.nanmean(metric['all_cls_acp'])
-    len_classes = len(data_loader.dataset.CLASSES)
-    if ap_nan_count > 0:
-        metric['map'] = np.nansum(metric['all_cls_ap']) / len_classes
-    if cap_nan_count > 0:
-        metric['cap'] = np.nansum(metric['all_cls_acp']) / len_classes
-    for i, ap in enumerate(metric['all_cls_ap']):
-        cls_name = data_loader.dataset.CLASSES[i+1] # with_bg=False
-        logger.info('{}: {:.4f}'.format(cls_name, ap))
-
-    for i, cap in enumerate(metric['all_cls_acp']):
-        cls_name = data_loader.dataset.CLASSES[i+1]
-        logger.info('{}: {:.4f}'.format(cls_name, cap))
-    # embed()
-    # exit()
-
-    mAP = metric['map']*100
-    cmAP = metric['cap']*100
-    torch.cuda.empty_cache()
-    logger.info('[Epoch-{}] [Dataset-{}] mAP: {:.2f}/% means map: {:.2f}/%\n'.format(epoch, data_loader.dataset, mAP, cmAP))
-    logger.info('Clearing zero shot classifier')
-    if writer is not None and dist.get_rank() == 0:
-        writer.add_scalar("mAP", mAP, epoch)
-        writer.add_scalar("cmAP", cmAP, epoch)
-    dist.barrier()
-    return mAP, cmAP
-
-
-@torch.no_grad()
-def validate_seg(config, data_loader, model, epoch=0, writer=None, tokenizer=None):
-    logger = get_logger()
-    dist.barrier()
-    model.eval()
-
-    if hasattr(model, 'module'):
-        model_without_ddp = model.module
-    else:
-        model_without_ddp = model
-
-    text_transform = build_text_transform(False, config.data.text_aug, with_dc=False)
-    if config.model.text_encoder['type'] in ['DistilBert', 'Bert','BertMedium','Roberta']:
-        seg_model = build_seg_inference(model_without_ddp, data_loader.dataset, text_transform, config.evaluate.seg, tokenizer)
-    else:
-        seg_model = build_seg_inference(model_without_ddp, data_loader.dataset, text_transform, config.evaluate.seg)
-
-    mmddp_model = MMDistributedDataParallel(
-        seg_model, device_ids=[torch.cuda.current_device()], broadcast_buffers=False)
-    mmddp_model.eval()
-    results = multi_gpu_test(
-        model=mmddp_model,
-        data_loader=data_loader,
-        tmpdir=None,
-        gpu_collect=True,
-        efficient_test=False,
-        pre_eval=True,
-        format_only=False)
-
-    if dist.get_rank() == 0:
-        metric = [data_loader.dataset.evaluate(results, metric='mIoU')]
-    else:
-        metric = [None]
-    dist.broadcast_object_list(metric)
-    miou_result = metric[0]['mIoU'] * 100
-
-    torch.cuda.empty_cache()
-    logger.info(f'Eval Seg mIoU {miou_result:.2f}')
-    if writer is not None and dist.get_rank() == 0:
-        writer.add_scalar("mIoU", miou_result, epoch)
-    dist.barrier()
-    return miou_result
 
 def setup_for_distributed(is_master):
     """
@@ -945,8 +592,6 @@ def init_distributed_mode(args):
     setup_for_distributed(args.rank == 0)
 
 def main():
-    # embed()
-    # exit()
     args = parse_args()
     cfg = get_config(args)
     '''
