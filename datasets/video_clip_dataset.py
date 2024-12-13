@@ -167,7 +167,7 @@ class VideoClipDataset(Dataset):
     """
     Video Clip Dataset.
     sample_meta = torch.load(io.BytesIO(memoryview(client.get(f"pvideo:s3://internvid_extc_feats_4fps/CLIP_ViT_B_16/wV2WNFpaBdw.pth"))))
-    local_instance = "/mnt/petrelfs/heyinan/00_zqs/data/tmp/1ezrj3GQWG0.pth"
+    local_instance = "/mnt/petrelfs/xxx/00_xxx/data/tmp/1ezrj3GQWG0.pth"
     Arguments:
         - root_dir (:obj:`str`): root directory of dataset
         - meta_file (:obj:`str`): name of meta file
@@ -235,7 +235,7 @@ class VideoClipDataset(Dataset):
         self.use_iamge = use_image
 
         self.metas = []
-        self.client = Client("/mnt/petrelfs/zhaoqingsong/petreloss.conf")
+        self.client = Client("/mnt/petrelfs/xxx/petreloss.conf")
         self.tokenizer = clip.tokenize
 
         ## load all sessions and targets
@@ -336,13 +336,7 @@ class VideoClipDataset(Dataset):
                 self.metas.append([session, start, end, enc_target])
                 # self.metas.append([session, start, end, enc_raw_caption, enc_caption_mask])
 
-        # we have 106176 sessions, use 10000 videos, set enc nonzero: 8, get 2339673 metas
-        # we have 106176 sessions, use 10000 videos, set enc nonzero: 8, get 3161088 metas 
-        # we have 106176 sessions, use 5000 videos, set enc nonzero: 0, get 12424546 metas        
-        # we have 14950 sessions, use all videos, set enc nonzero: 0, get 6435178 metas.
         print(f"we have {len(self.sessions_all)} sessions, use {use_nvideos} videos, set enc nonzero: {nonzero}, get {len(self.metas)} metas.")
-        # embed()
-        # exit()
 
     def __len__(self):        
         return len(self.metas)
@@ -399,13 +393,9 @@ class VideoClipDataset(Dataset):
             else:
                 img = Image.open(os.path.join(video_path, frame_name))
             img = clip._transform(224)(img)
-            # img = PILToTensor()(img).unsqueeze(0)
             img = img.float()
-            # print(img.shape)  # 3, 224, 224
             images_group.append(img)
-        # print(img.shape)
-        # embed()
-        # exit()
+
         torch_imgs = torch.stack(images_group)
         # print(torch_imgs.shape)  # [32, 3, 224, 224]
         return torch_imgs
@@ -439,16 +429,11 @@ class VideoClipDataset(Dataset):
                     len_prompts = self.multi_label - 1
                     select_cls = np.random.choice(enc_cls, len_prompts, replace=True)
                     enc_raw_caption += [random.choice(kinetics_templates).format(self.CLASSES[i]) for i in select_cls]  # TODO here
-                    # remove_common_cls = list_enc_cls.remove(common_cls)
-                    # if remove_common_cls is not None:
-                    # else:
-                    #     enc_raw_caption += [random.choice(kinetics_templates).format(self.CLASSES[common_cls]) for _ in range(len_prompts)]
 
                     enc_caption_mask = np.zeros_like(enc_target)
                     enc_caption_mask[nonzero_indices] = 1
                     enc_caption_mask = torch.Tensor(enc_caption_mask)
-                    # embed()
-                    # exit()
+
             elif self.caption_pick == "random":
                 if enc_cls > 0:
                     enc_raw_caption = random.choice(kinetics_templates).format(self.CLASSES[enc_cls])
@@ -462,8 +447,6 @@ class VideoClipDataset(Dataset):
             else:
                 raise NotImplementedError
             
-            # dec_raw_caption = list(targets[dec_cls-1].values())[0][2]
-            # enc_raw_caption = next(item[enc_cls] for item in targets if enc_cls in item)  # check it again
 
             if self.caption_pick == "txt_cat": # return tokenized captions [3, 77]
                 enc_raw_caption = self.tokenizer(enc_raw_caption)
@@ -492,13 +475,6 @@ class VideoClipDataset(Dataset):
         session, start, end, enc_target = self.metas[idx]
         ret_info = dict()
         try:
-            # ## load feats from s3 xxxxx.pth
-            # if self.read_from == 'petrel':
-            #     session_s3_path = osp.join(self.root_dir, f"{session}.pth")
-            #     sample_meta = torch.load(io.BytesIO(self.client.get(session_s3_path)))
-            # else:
-            #     raise NotImplementedError
-            # camera_inputs = sample_meta['rgb'][start:end]
             camera_inputs = self.inputs_feats[session][start:end]
 
             ## get raw captions
@@ -536,10 +512,6 @@ class VideoClipDataset(Dataset):
                     enc_caption_mask = torch.Tensor(enc_caption_mask)        
             else:
                 raise NotImplementedError
-            
-            # dec_raw_caption = list(targets[dec_cls-1].values())[0][2]
-            # enc_raw_caption = next(item[enc_cls] for item in targets if enc_cls in item)  # check it again
-            # assert self.is_contains_chinese(", ".join([enc_raw_caption, dec_raw_caption])) == False
 
             ### for clip TextTransformer, captions are here tokenised ###
             ### for bert/distilbert, text transform are used to select nouns, captions will be tokensized later ###
@@ -591,22 +563,16 @@ class VideoClipDataset(Dataset):
                     enc_caption_mask = np.zeros_like(enc_target) # TODO  np.zeros_like / np.ones_like ?
                     enc_caption_mask = torch.Tensor(enc_caption_mask)
                 elif len(enc_cls) > 0:
-                    # list_enc_cls = list(enc_cls)
                     enc_raw_caption = [random.choice(kinetics_templates).format(self.CLASSES[common_cls])]
-                    # len_prompts = self.multi_label - len(enc_cls)
                     len_prompts = self.multi_label - 1
                     select_cls = np.random.choice(enc_cls, len_prompts, replace=True)
                     enc_raw_caption += [random.choice(kinetics_templates).format(self.CLASSES[i]) for i in select_cls]  # TODO here
-                    # remove_common_cls = list_enc_cls.remove(common_cls)
-                    # if remove_common_cls is not None:
-                    # else:
-                    #     enc_raw_caption += [random.choice(kinetics_templates).format(self.CLASSES[common_cls]) for _ in range(len_prompts)]
+
 
                     enc_caption_mask = np.zeros_like(enc_target)
                     enc_caption_mask[nonzero_indices] = 1
                     enc_caption_mask = torch.Tensor(enc_caption_mask)
-                    # embed()
-                    # exit()
+
             elif self.caption_pick == "random":
                 if enc_cls > 0:
                     enc_raw_caption = random.choice(kinetics_templates).format(self.CLASSES[enc_cls])
@@ -619,9 +585,7 @@ class VideoClipDataset(Dataset):
                     enc_caption_mask = torch.Tensor(enc_caption_mask)
             else:
                 raise NotImplementedError
-            
-            # dec_raw_caption = list(targets[dec_cls-1].values())[0][2]
-            # enc_raw_caption = next(item[enc_cls] for item in targets if enc_cls in item)  # check it again
+
 
             if self.caption_pick == "txt_cat": # return tokenized captions [3, 77]
                 enc_raw_caption = self.tokenizer(enc_raw_caption)
@@ -658,11 +622,7 @@ class VideoClipDataset(Dataset):
         
     def judge_noun(self, n):
         n = n.replace('.', '')
-        # ans = n.split("'s")[0].split(',')[0]
-        # ans = n.strip("'s").strip(",")
         ans = n
-        ### conduct Lemmatization ###
-        # ans = nlp(ans.lower())[0].lemma_
         ans = lemmatizer.lemmatize(ans.lower())
         
         if ans in syn_dict:
@@ -773,8 +733,6 @@ class VideoClipDataset(Dataset):
             raw_answer = random.choice(kinetics_templates).format(" and ".join(list(set(entity_list))))
         else:
             raw_answer = caption
-        # embed()
-        # exit()
         return raw_question, raw_answer
     
 
