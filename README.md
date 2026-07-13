@@ -10,12 +10,20 @@ Extensive experiments on four action detection benchmarks demonstrate that OV-OA
 
 
 ## Release Notes
-
+- **[2026/07/10] OV-OAD** Model and Inference scripts release.🔥
 - **[2024/10/04] OV-OAD** Code release.
 - **[2024/12/11] OV-OAD** Open source data processing.
-- **[2024/12/13] 🔥 OV-OAD** Open source training and testing code.
+- **[2024/12/13] OV-OAD** Open source training and testing code.
 
 ## Models & Scripts
+### Model 
+Our model is available as open source on [Google Drive](https://drive.google.com/file/d/1fxf3rZE8usKJJ0taCPgWboPrTcYFUtl1/view?usp=sharing). Have fun!
+
+### Inference
+```bash
+vim configs/enc32_anet_3layers_lsxattn_only_inference.yml # Adjust your own file directory
+bash scripts/thumos_infer_only.sh 
+```
 
 ### Installation
 

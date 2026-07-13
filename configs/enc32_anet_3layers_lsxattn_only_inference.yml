@@ -1,0 +1,207 @@
+# =============================================================================
+# 单路径 CLS-only 推理（评测）配置
+# 目的：加载已训练的 cls checkpoint，在 thomus14 上评测 mAP/cmAP。
+#       对应"cls 分支单跑"实验的 inference 阶段（单路径 token_strategy='cls'）。
+#
+# 入口脚本：main_pretrain.py（单路径，不是 main_pretrain_dual_path.py）
+# 运行命令：
+#   bash ./tools/token_strategy/cls_infer_only.sh
+#
+# 前置条件（集群上必须存在，否则报错）：
+#   1. checkpoint.resume 指向的 thomus_best_map.pth（cls 训练产出）
+#   2. 预提取 CLIP 特征路径（CLS token）
+#   3. meta_file：./extract_features/data_list/new_data_info.json
+#   4. thomus14 评测数据：oad/configs/_base_/datasets/thomus14.py 里的 data_root / pickle_root。
+# =============================================================================
+_base_: '../../default.yml'
+model_name: 'ovoador' # display name in the logger
+use_nvideos: 1  # total: 14950, -1 means use all videos; 0 ALSO means ALL (loader uses `if use_nvideos > 0`). eval-only: 1 session is enough, train loader is built but never iterated under eval_mode
+
+output: '/qszhao/output/ovoad/2026_0710_anet_cls_inference_only'
+
+device: cuda
+debug: False
+print_freq: 100
+single_eval: false 
+eval_mode: true  # 跳过 train_one_epoch 只评测
+
+data:
+  with_dc: False
+  train: 
+    root_dir: '/umug/Datasets/anet_extc_feats_4fps/CLIP_ViT_B_16_768_pooled_patch_token2/'
+    root_dir2: '/umug/Datasets/anet_extc_feats_4fps/CLIP_ViT_B_16_768/' # cls token
+    meta_file: './extract_features/data_list/new_data_info.json'
+    anno_file: '/umug/Datasets/ovoad_dataset_annos/anet/anno'
+
+    read_from: dir
+    use_nvideos: ${use_nvideos} 
+    nonzero: 0  
+    enc_steps: 32 # 128
+    dec_steps: 8
+    long_term_steps: 0
+    caption_pick: 'txt_cat'
+    use_dali: True
+    batch_size: 256 # 256
+    input_size: 224
+    test_resize: 256
+    verb_aug: false
+    verb_filter: false # 剔除不包含verb的caption, 没用
+    use_saliency: ${model.use_saliency}
+    use_enc_feat: ${model.use_enc_feat}
+    saliency_steps: ${model.saliency_steps} # number frame for saliency branch, default is 1
+    image_reader:
+          type: pil
+    sampler:
+          type: distributed_epoch
+    transforms:
+          type: STANDARD
+    use_ranked: False
+    
+    use_entity: ${model.use_entityloss} 
+    mask_type: verb  # dobj / verb 预测动词或动宾短语
+    use_distilbert: True
+    input_type: feature
+
+
+  text_aug:
+    max_seq_len: 77
+    multi_label: 3 # we use multi-label contrastive 
+    word_type: 'verb'
+
+  val:
+      type: clip
+      read_from: petrel
+      use_dali: True
+      batch_size: 32
+      num_workers: 4
+      pin_memory: False
+      input_size: 224
+      test_resize: 256
+      
+      root_dir: '/mnt/cache/share/images/val/'
+      meta_file: 'imagenet_info/val.json'
+      # you can change it to imagenet_info relative path, file already in gitlab
+      image_reader:
+          type: pil
+      sampler:
+          type: distributed
+      transforms:
+          type: ONECROP
+      evaluator:
+          type: imagenet
+          kwargs:
+              topk: [1, 5]
+      label_texts_ensemble: 'prompt1'
+          
+model:
+  type: MultiLabelContrastive
+  img_encoder:
+    type: GroupViT
+    embed_dim: 768  # small : 384; base: 768
+
+    num_heads: [8, 8, 8]  # small : [6, 6] 
+    embed_factors: [1, 1, 1]
+    depths: [4, 6, 2] # [4, 6, 2]
+    num_group_tokens: [0, 8, 0]
+    num_output_groups: [0, 2]
+
+    drop_rate: 0.1 # 0.1 
+    attn_drop_rate: 0.1 # 0.1 
+    drop_path_rate: 0.1 # 0.1 
+    enc_steps: ${data.train.enc_steps} 
+    dec_steps: ${data.train.dec_steps} 
+    patch_norm: false
+
+    use_enc_feat: ${model.use_enc_feat} 
+    enc_feat_lsxattn: ${model.enc_feat_lsxattn} 
+    short_term_length: 8
+    long_term_detach: false  # whether detach the long term memory attn maps, default: false 33.7, true 33.8
+    switch_off_layer0: false # whether switch off the long short-term branch and groupvit ? default: false
+
+    mask_attn_layers: [0]  # default: [0] , [0, 1]
+    only_mask_short: false  # whether only mask the short term frames, default: false
+    long_term_compress: null  # enc_feat_lsxattn & use_enc_feat must be true, null , dw_conv1d, conv1d, causal_conv1d: default: null
+
+    pre_proj: "identity" # use one layer projection before the groupvit: identity, linear, adapter_serial, adapter_parallel 
+    imgnet_pretrained: null  # null, timesformer
+ 
+    no_patch_embed: true 
+    per_step_tokens_num: 1 # 每一步的token数量
+    token_strategy: 'cls' # 用来控制groupvit使用怎么的token策略
+
+
+  text_encoder:
+    type: CLIPTransformer
+    context_length: 77
+    width: 512
+    layers: 12
+    vocab_size: 49408
+    pretrained: true
+    fixed: false
+    ffn_adapt: true  # 'whether activate AdaptFormer'
+    ffn_option: "parallel"
+    ffn_adapter_layernorm_option: "none"
+    ffn_adapter_init_option: "lora"
+    ffn_adapter_scalar: "0.1"
+    ffn_num: 64
+  contrast_temperature: 0.07
+  proj_num_layers: 2 # when -1 text projection must be used!! as 2 commit the text projection !!
+  output_dim: 256
+  multi_label: ${data.text_aug.multi_label}
+
+  use_entityloss: false
+  entity_weight: 1.0
+
+  use_diceloss: true
+  diceloss_weight: 1.0
+
+  use_focalloss: false
+  focalloss_weight: 5.0
+
+  use_saliency: true 
+  saliency_steps: 1 # number frame for saliency branch, default is 1
+  saliency_weight: 0.1
+  
+  use_enc_feat: true 
+  enc_feat_lsxattn: true
+  enc_feat_weight: 0.1
+
+
+  
+train:
+  epochs: 1 # eval-only: validate_oad runs exactly once (eval_mode has no break in the epoch loop)
+  base_lr: 6.4e-5
+  warmup_lr: 1.6e-6 
+  warmup_epochs: 2
+  min_lr: 1.6e-5
+  clip_grad: 5.0
+checkpoint:
+  auto_resume: false
+  resume: '/qszhao/output/ovoad/2026_0429_anet_cls/ovoador_bs256x4/thomus_best_map.pth'  # the checkpoint path!
+  save_freq: 50
+evaluate:
+  eval_only: true  # prevents load_checkpoint from restoring start_epoch from ckpt's 'epoch' key; without this range(start_epoch,epochs) may run 0 or many times
+  eval_freq: 1
+  oad:
+    enc_steps: ${data.train.enc_steps}
+    long_term_steps: ${data.train.long_term_steps}
+    eval_type: "single" # set saliency probs
+    use_saliency: ${model.use_saliency}
+    use_enc_feat: ${model.use_enc_feat}
+    single_eval: ${single_eval}
+    datasets: [
+      'thomus', 
+      # 'tvseries',
+      # 'epic',
+      # 'anet',
+      ]
+    cfg: [
+      'oad/configs/_base_/datasets/thomus14_infer_only.py', # this for small test, only 5 videos
+      # 'oad/configs/_base_/datasets/thomus14.py', # full thumos
+      # 'oad/configs/_base_/datasets/tvseries.py',
+      # 'oad/configs/_base_/datasets/epic_verb.py', # class_type="verb_perframe"
+      # 'oad/configs/_base_/datasets/anet.py',
+      ]
+    template: simple_kinectics  # full_kinectics, subset_kinectics, simple_imagenet, etc
+    save_best: false  # inference-only: don't write best_map checkpoints during eval
+
